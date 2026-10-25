@@ -191,7 +191,10 @@ p.lede{
 .brand{ display:flex; align-items:center; gap:12px; }
 .brand img{ height: 34px; width:auto; }
 
-.main-nav{ display:flex; align-items:center; gap: 30px; }
+.main-nav{ display:flex; align-items:center; gap: 26px; }
+.main-nav a{ white-space:nowrap; }
+.brand img{ height: 40px; }
+@media (max-width: 1180px){ .header-phone{ display:none; } .main-nav{ gap: 20px; } }
 .main-nav a{
   font-size: 13px; letter-spacing: 0.02em; font-weight: 600;
   color: var(--ivory); opacity: 0.82;
