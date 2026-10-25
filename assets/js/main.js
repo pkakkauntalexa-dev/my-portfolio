@@ -29,7 +29,7 @@ var YM_ID = 0;
   if (consent === "yes") loadMetrika();
   function goal(name) { if (YM_ID && typeof window.ym === "function") window.ym(YM_ID, "reachGoal", name); }
 
-  /* Цели: tg_click, wa_click, mail_click, demo_open, case_open (атрибут data-goal) */
+  /* Цели: tg_click, wa_click, mail_click, demo_open, case_open, quiz_done (атрибут data-goal) */
   document.addEventListener("click", function (e) {
     var el = e.target.closest ? e.target.closest("[data-goal]") : null;
     if (el && el.type !== "submit") goal(el.getAttribute("data-goal"));
@@ -141,6 +141,82 @@ var YM_ID = 0;
     refresh();
   }
 
+  /* ---------- Тест «Какой сайт нужен»: 4 вопроса → формат, цена, готовая заявка ---------- */
+  var quiz = document.querySelector("[data-quiz]");
+  if (quiz) {
+    var qs = quiz.querySelectorAll(".q"), step = 0, answers = {}, labels = {};
+    var qBar = quiz.querySelector(".quiz-progress i"), count = quiz.querySelector("[data-quiz-count]");
+    var resBox = quiz.querySelector("[data-quiz-result]"), back = quiz.querySelector("[data-quiz-back]");
+    var PACKS = {
+      landing: { type: "лендинг", name: "Лендинг, который собирает заявки", price: "от 20 000 ₽", time: "первая версия за 3 дня",
+        why: "Одна страница, которая ведёт к одному действию — написать вам. Быстро запускается, и на неё удобно вести рекламу." },
+      catalog: { type: "сайт-каталог", name: "Сайт-каталог с ценами", price: "от 30 000 ₽", time: "первая версия за 4 дня",
+        why: "Покупатель видит ассортимент и цены до звонка и приходит уже с выбором. Плюс отзывы и маршрут." },
+      redesign: { type: "редизайн сайта", name: "Редизайн сайта", price: "от 25 000 ₽", time: "первая версия за 4–5 дней",
+        why: "Старый сайт станет готовым брифом: оставим то, что работает, и переделаем то, что мешает продавать." },
+      invest: { type: "сайт для инвестора", name: "Сайт для инвестора", price: "от 35 000 ₽", time: "первая версия за 5 дней",
+        why: "Одна страница, где инвестор за несколько минут видит продукт, спрос, юнит-экономику и ваше предложение." }
+    };
+    var decide = function () {
+      if (answers.biz === "startup" || answers.goal === "invest") return PACKS.invest;
+      var big = answers.items === "many" || answers.goal === "choose";
+      if (answers.now === "old") {
+        var r = Object.assign({}, PACKS.redesign);
+        if (big) { r.name = "Редизайн с каталогом"; r.price = "от 35 000 ₽"; }
+        return r;
+      }
+      if (big || (answers.biz === "shop" && answers.items !== "one")) return PACKS.catalog;
+      return PACKS.landing;
+    };
+    var show = function () {
+      qs.forEach(function (q, i) { q.classList.toggle("is-active", i === step); });
+      var done = step >= qs.length;
+      resBox.hidden = !done;
+      back.hidden = step === 0 || done;
+      qBar.style.width = (done ? 100 : (step + 1) / qs.length * 100) + "%";
+      count.textContent = done ? "Готово" : "Вопрос " + (step + 1) + " из " + qs.length;
+      if (done) {
+        var p = decide();
+        resBox.querySelector('[data-r="name"]').textContent = p.name;
+        resBox.querySelector('[data-r="why"]').textContent = p.why;
+        resBox.querySelector('[data-r="price"]').textContent = p.price;
+        resBox.querySelector('[data-r="time"]').textContent = p.time;
+        resBox.setAttribute("data-type", p.type);
+      }
+    };
+    qs.forEach(function (q, i) {
+      q.addEventListener("click", function (e) {
+        var b = e.target.closest("button[data-v]");
+        if (!b) return;
+        q.querySelectorAll("button").forEach(function (x) { x.classList.toggle("is-picked", x === b); });
+        answers[q.getAttribute("data-q")] = b.getAttribute("data-v");
+        labels[q.getAttribute("data-q")] = q.querySelector("legend").textContent + " — " + b.textContent;
+        step = i + 1;
+        setTimeout(show, 160);
+      });
+    });
+    back.addEventListener("click", function () { if (step > 0) { step--; show(); } });
+    quiz.querySelector("[data-quiz-reset]").addEventListener("click", function () {
+      step = 0; answers = {}; labels = {};
+      quiz.querySelectorAll(".is-picked").forEach(function (x) { x.classList.remove("is-picked"); });
+      show();
+    });
+    quiz.querySelector("[data-quiz-send]").addEventListener("click", function () {
+      var type = resBox.getAttribute("data-type");
+      var radio = document.querySelector('#brief input[name=type][value="' + type + '"]');
+      if (radio) { radio.checked = true; radio.dispatchEvent(new Event("change", { bubbles: true })); }
+      var msg = document.getElementById("f-msg");
+      if (msg) {
+        var lines = ["Ответы теста:"];
+        ["biz", "now", "items", "goal"].forEach(function (k) { if (labels[k]) lines.push("• " + labels[k]); });
+        lines.push("Подошло: " + resBox.querySelector('[data-r="name"]').textContent + ", " + resBox.querySelector('[data-r="price"]').textContent + ".");
+        msg.value = lines.join("\n");
+        msg.dispatchEvent(new Event("input", { bubbles: true }));
+      }
+    });
+    show();
+  }
+
   /* ---------- Год в подвале ---------- */
   document.querySelectorAll("[data-year]").forEach(function (el) { el.textContent = new Date().getFullYear(); });
 
@@ -148,7 +224,7 @@ var YM_ID = 0;
   var box = document.getElementById("field"), cv = document.getElementById("cv");
   if (box && cv && cv.getContext) {
     var ctx = cv.getContext("2d");
-    var w = 0, h = 0, t = 0, mx = null, my = null, cx = 0, cy = 0, colors = {}, raf = 0, visible = true;
+    var w = 0, h = 0, t = 0, mx = null, my = null, cx = 0, cy = 0, colors = {}, raf = 0, visible = true, waves = [];
     var readColors = function () {
       var s = getComputedStyle(root);
       colors = { ink: s.getPropertyValue("--muted").trim(), acc: s.getPropertyValue("--accent").trim() };
@@ -163,11 +239,17 @@ var YM_ID = 0;
       var tx = mx !== null ? mx : w * .55 + Math.cos(t) * w * .22, ty = my !== null ? my : h * .45 + Math.sin(t * 1.3) * h * .2;
       cx += (tx - cx) * .08; cy += (ty - cy) * .08;
       ctx.clearRect(0, 0, w, h);
+      waves = waves.filter(function (wv) { wv.r += 7; wv.life -= 0.012; return wv.life > 0; });
       var gap = 22, R = Math.max(w, h) * .32;
       for (var y = gap / 2; y < h; y += gap) {
         for (var x = gap / 2; x < w; x += gap) {
           var dx = x - cx, dy = y - cy, d = Math.sqrt(dx * dx + dy * dy), k = Math.max(0, 1 - d / R);
-          var push = k * k * 26, a = Math.atan2(dy, dx);
+          var push = k * k * 26, a = Math.atan2(dy, dx), glow = 0;
+          for (var wi = 0; wi < waves.length; wi++) {
+            var wv = waves[wi], wdx = x - wv.x, wdy = y - wv.y, wd = Math.sqrt(wdx * wdx + wdy * wdy), band = Math.abs(wd - wv.r);
+            if (band < 36) { var f = (1 - band / 36) * wv.life; push += f * 16; glow = Math.max(glow, f); if (wd > 0) a = Math.atan2(wdy, wdx); }
+          }
+          k = Math.max(k, glow);
           ctx.globalAlpha = 0.28 + k * 0.72;
           ctx.fillStyle = k > .35 ? colors.acc : colors.ink;
           ctx.beginPath(); ctx.arc(x + Math.cos(a) * push, y + Math.sin(a) * push, 1 + k * 3.2, 0, Math.PI * 2); ctx.fill();
@@ -178,9 +260,17 @@ var YM_ID = 0;
     };
     box.addEventListener("pointermove", function (e) { var r = box.getBoundingClientRect(); mx = e.clientX - r.left; my = e.clientY - r.top; });
     box.addEventListener("pointerleave", function () { mx = my = null; });
+    /* клик по полю — волна расходится кругами */
+    box.addEventListener("pointerdown", function (e) {
+      if (reduce) return;
+      var r = box.getBoundingClientRect();
+      waves.push({ x: e.clientX - r.left, y: e.clientY - r.top, r: 0, life: 1 });
+      if (waves.length > 4) waves.shift();
+    });
     window.addEventListener("resize", function () { size(); if (reduce) draw(); });
     var mq = window.matchMedia("(prefers-color-scheme: dark)");
     if (mq.addEventListener) mq.addEventListener("change", function () { readColors(); if (reduce) draw(); });
+    document.addEventListener("identitychange", function () { readColors(); if (reduce) draw(); });
     if ("IntersectionObserver" in window) {
       new IntersectionObserver(function (en) {
         visible = en[0].isIntersecting;
